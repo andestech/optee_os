@@ -1086,8 +1086,10 @@ static size_t collect_mem_ranges(struct tee_mmap_region *memory_map,
 	add_va_space(memory_map, num_elems, MEM_AREA_RES_VASPACE,
 		     CFG_RESERVED_VASPACE_SIZE, &last);
 
+#ifdef CFG_CORE_DYN_SHM
 	add_va_space(memory_map, num_elems, MEM_AREA_SHM_VASPACE,
 		     SHM_VASPACE_SIZE, &last);
+#endif
 
 	memory_map[last].type = MEM_AREA_END;
 
