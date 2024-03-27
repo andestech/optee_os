@@ -318,7 +318,7 @@ static void thread_interrupt_handler(unsigned long cause,
 		thread_foreign_interrupt_handler(regs, user);
 		break;
 	case IRQ_XSOFT:
-		thread_unhandled_trap(regs, cause);
+		thread_foreign_interrupt_handler(regs, user);
 		break;
 	case IRQ_XEXT:
 		thread_foreign_interrupt_handler(regs, user);
