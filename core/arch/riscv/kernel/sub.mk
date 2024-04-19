@@ -18,6 +18,10 @@ srcs-$(CFG_SEMIHOSTING) += semihosting_rv.S
 srcs-y += thread_optee_abi.c
 srcs-y += thread_optee_abi_rv.S
 asm-defines-y += asm-defines.c
+ifeq ($(CFG_WITH_FPU),y)
+srcs-y += fpu.c
+srcs-y += fpu_rv.S
+endif
 
 ifeq ($(CFG_SYSCALL_FTRACE),y)
 # We would not like to profile thread.c file as it provide common APIs

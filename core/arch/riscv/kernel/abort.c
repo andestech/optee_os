@@ -20,7 +20,7 @@
 
 enum fault_type {
 	FAULT_TYPE_USER_MODE_PANIC,
-	FAULT_TYPE_USER_MODE_VFP,
+	FAULT_TYPE_USER_MODE_FPU,
 	FAULT_TYPE_PAGE_FAULT,
 	FAULT_TYPE_IGNORE,
 };
@@ -245,14 +245,14 @@ static void handle_user_mode_panic(struct abort_info *ai)
 			      ai->regs->status);
 }
 
-#ifdef CFG_WITH_VFP
-static void handle_user_mode_vfp(void)
+#ifdef CFG_WITH_FPU
+static void handle_user_mode_fpu(void)
 {
 	struct ts_session *s = ts_get_current_session();
 
-	thread_user_enable_vfp(&to_user_mode_ctx(s->ctx)->vfp);
+	thread_user_enable_fpu(&to_user_mode_ctx(s->ctx)->fpu);
 }
-#endif /*CFG_WITH_VFP*/
+#endif /*CFG_WITH_FPU*/
 
 #ifdef CFG_WITH_USER_TA
 
@@ -269,24 +269,87 @@ bool abort_is_user_exception(struct abort_info *ai __unused)
 }
 #endif /*CFG_WITH_USER_TA*/
 
-#if defined(CFG_WITH_VFP) && defined(CFG_WITH_USER_TA)
-static bool is_vfp_fault(struct abort_info *ai)
+#if defined(CFG_WITH_FPU) && defined(CFG_WITH_USER_TA)
+static bool is_fpu_fault(struct abort_info *ai)
 {
-	/* Implement */
+	unsigned long cause = ai->regs->cause;
+	unsigned long inst = ai->regs->tval;
+	unsigned long opcode = inst & 0x7f;
+	int csr_num = 0;
+
+	if (cause != CAUSE_ILLEGAL_INSTRUCTION)
+		return false;
+
+	/* 32-bit instructions */
+	if ((opcode & 0x3) == 0b11) {
+		switch (opcode) {
+		/* FLD */
+		case 0b0000111:
+		/* FSD */
+		case 0b0100111:
+		/* FMADD */
+		case 0b1000011:
+		/* FMSUB */
+		case 0b1000111:
+		/* FNMSUB */
+		case 0b1001011:
+		/* FNMADD */
+		case 0b1001111:
+		/* OP-FP */
+		case 0b1010011:
+			return true;
+			break;
+		/* CSR read/write to fflags, frm and fcsr */
+		case 0b1110011:
+			csr_num = (uint32_t)inst >> 20;
+			if (csr_num == CSR_FFLAGS || \
+			    csr_num == CSR_FRM || \
+			    csr_num == CSR_FCSR) {
+				return true;
+			}
+			break;
+		default:
+			return false;
+		}
+	}
+
+	/*
+	 * 16-bit compressed instructions (RVC)
+	 * inst[15:13]
+	 * - 001: C.FLD    RV32/64
+	 * - 001: C.FLDSP  RV32/64
+	 * - 011: C.FLW    RV32
+	 * - 011: C.FLWSP  RV32
+	 * - 101: C.FSD    RV32/64
+	 * - 101: C.FSDSP  RV32/64
+	 * - 111: C.FSW    RV32
+	 * - 111: C.FSWSP  RV32
+	 * i.e.
+	 * - xx1 on RV32
+	 * - x01 on RV64
+	 */
+#if __riscv_xlen == 32
+	return (inst >> 13 & 0x1) == 1;
+#elif __riscv_xlen == 64
+	return ((inst >> 13 & 0x3) ^ 0b01) == 0;
+#else
+	#error "Unknown __riscv_xlen"
+#endif
+
 	return false;
 }
-#else /*CFG_WITH_VFP && CFG_WITH_USER_TA*/
-static bool is_vfp_fault(struct abort_info *ai __unused)
+#else /*CFG_WITH_FPU && CFG_WITH_USER_TA*/
+static bool is_fpu_fault(struct abort_info *ai __unused)
 {
 	return false;
 }
-#endif  /*CFG_WITH_VFP && CFG_WITH_USER_TA*/
+#endif  /*CFG_WITH_FPU && CFG_WITH_USER_TA*/
 
 static enum fault_type get_fault_type(struct abort_info *ai)
 {
 	if (abort_is_user_exception(ai)) {
-		if (is_vfp_fault(ai))
-			return FAULT_TYPE_USER_MODE_VFP;
+		if (is_fpu_fault(ai))
+			return FAULT_TYPE_USER_MODE_FPU;
 		return FAULT_TYPE_USER_MODE_PANIC;
 	}
 
@@ -363,14 +426,12 @@ void abort_handler(uint32_t abort_type, struct thread_abort_regs *regs)
 	case FAULT_TYPE_USER_MODE_PANIC:
 		DMSG("[abort] abort in User mode (TA will panic)");
 		save_abort_info_in_tsd(&ai);
-#ifdef CFG_WITH_VFP
-		vfp_disable();
-#endif
+		fpu_disable();
 		handle_user_mode_panic(&ai);
 		break;
-#ifdef CFG_WITH_VFP
-	case FAULT_TYPE_USER_MODE_VFP:
-		handle_user_mode_vfp();
+#ifdef CFG_WITH_FPU
+	case FAULT_TYPE_USER_MODE_FPU:
+		handle_user_mode_fpu();
 		break;
 #endif
 	case FAULT_TYPE_PAGE_FAULT:
@@ -386,9 +447,7 @@ void abort_handler(uint32_t abort_type, struct thread_abort_regs *regs)
 		}
 		DMSG("[abort] abort in User mode (TA will panic)");
 		save_abort_info_in_tsd(&ai);
-#ifdef CFG_WITH_VFP
-		vfp_disable();
-#endif
+		fpu_disable();
 		handle_user_mode_panic(&ai);
 		break;
 	}

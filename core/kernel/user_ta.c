@@ -188,7 +188,12 @@ static TEE_Result user_ta_enter(struct ts_session *session,
 				     &utc->ta_ctx.panicked,
 				     &utc->ta_ctx.panic_code);
 
+#ifdef CFG_WITH_VFP
 	thread_user_clear_vfp(&utc->uctx);
+#endif
+#ifdef CFG_WITH_FPU
+	thread_user_clear_fpu(&utc->uctx);
+#endif
 
 	if (utc->ta_ctx.panicked) {
 		abort_print_current_ts();

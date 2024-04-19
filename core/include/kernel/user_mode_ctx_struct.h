@@ -39,6 +39,9 @@ struct user_mode_ctx {
 #if defined(CFG_WITH_VFP)
 	struct thread_user_vfp_state vfp;
 #endif
+#if defined(CFG_WITH_FPU)
+	struct thread_user_fpu_state fpu;
+#endif
 #if defined(CFG_TA_PAUTH)
 	struct thread_pauth_keys keys;
 #endif

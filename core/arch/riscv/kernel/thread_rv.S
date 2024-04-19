@@ -43,6 +43,11 @@ FUNC thread_trap_vect , :
 	bnez	tp, 0f
 	/* Read tp back */
 	csrrw	tp, CSR_XSCRATCH, tp
+
+	/* Disable FPU to detect illegal use of floating-point */
+	li	t0, STATUS_FS_MASK
+	csrc	CSR_XSTATUS, t0
+
 	j	trap_from_kernel
 0:
 	/* Now tp is thread_core_local */
@@ -501,6 +506,15 @@ abort_from_user:
 	csrw	CSR_XIE, t0
 	/* Restore XSTATUS */
 	load_xregs sp, THREAD_ABT_REG_STATUS, REG_T0
+
+	/* Do NOT restore xstatus.FS */
+	li	t1, ~STATUS_FS_MASK
+	and	t0, t0, t1
+	not	t1, t1
+	csrr	t2, CSR_XSTATUS
+	and	t2, t2, t1
+	or t0, t0, t2
+
 	csrw	CSR_XSTATUS, t0
 	/* Set scratch as thread_core_local */
 	csrw	CSR_XSCRATCH, tp

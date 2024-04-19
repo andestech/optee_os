@@ -69,6 +69,12 @@
 #define CSR_XSTATUS_SUM		BIT(18)
 #define CSR_XSTATUS_MXR		BIT(19)
 
+#define STATUS_FS_MASK		SHIFT_U64(0b11, 13)
+#define STATUS_FS_OFF		SHIFT_U64(0b00, 13)
+#define STATUS_FS_INITIAL	SHIFT_U64(0b01, 13)
+#define STATUS_FS_CLEAN		SHIFT_U64(0b10, 13)
+#define STATUS_FS_DIRTY		SHIFT_U64(0b11, 13)
+
 #ifndef __ASSEMBLER__
 
 #define read_csr(csr)							\

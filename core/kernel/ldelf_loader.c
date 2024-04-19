@@ -140,7 +140,14 @@ TEE_Result ldelf_init_with_ldelf(struct ts_session *sess,
 				     is_32bit, &panicked, &panic_code);
 
 	sess->handle_scall = sess->ctx->ops->handle_scall;
+
+#ifdef CFG_WITH_VFP
 	thread_user_clear_vfp(uctx);
+#endif
+#ifdef CFG_WITH_FPU
+	thread_user_clear_fpu(uctx);
+#endif
+
 	ldelf_sess_cleanup(sess);
 
 	if (panicked) {
@@ -298,7 +305,14 @@ TEE_Result ldelf_dump_state(struct user_mode_ctx *uctx)
 				     is_32bit, &panicked, &panic_code);
 
 	sess->handle_scall = sess->ctx->ops->handle_scall;
+
+#ifdef CFG_WITH_VFP
 	thread_user_clear_vfp(uctx);
+#endif
+#ifdef CFG_WITH_FPU
+	thread_user_clear_fpu(uctx);
+#endif
+
 	ldelf_sess_cleanup(sess);
 
 	if (panicked) {
@@ -347,7 +361,12 @@ TEE_Result ldelf_dump_ftrace(struct user_mode_ctx *uctx,
 				     is_32bit, &panicked, &panic_code);
 
 	sess->handle_scall = sess->ctx->ops->handle_scall;
+#ifdef CFG_WITH_VFP
 	thread_user_clear_vfp(uctx);
+#endif
+#ifdef CFG_WITH_FPU
+	thread_user_clear_fpu(uctx);
+#endif
 	ldelf_sess_cleanup(sess);
 
 	if (panicked) {

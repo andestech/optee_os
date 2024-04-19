@@ -10,6 +10,7 @@
 #include <compiler.h>
 #include <riscv.h>
 #include <types_ext.h>
+#include <kernel/fpu.h>
 #endif
 
 #ifndef __ASSEMBLER__
@@ -37,7 +38,10 @@ struct thread_core_local {
 #endif
 } THREAD_CORE_LOCAL_ALIGNED;
 
-struct thread_user_vfp_state {
+struct thread_user_fpu_state {
+	struct fpu_state fpu;
+	bool lazy_saved;
+	bool saved;
 };
 
 struct thread_abi_args {
@@ -169,35 +173,15 @@ struct user_mode_ctx;
 #define THREAD_EXCP_ALL			(THREAD_EXCP_FOREIGN_INTR |\
 					 THREAD_EXCP_NATIVE_INTR)
 
-#ifdef CFG_WITH_VFP
-uint32_t thread_kernel_enable_vfp(void);
-void thread_kernel_disable_vfp(uint32_t state);
-void thread_kernel_save_vfp(void);
-void thread_kernel_restore_vfp(void);
-void thread_user_enable_vfp(struct thread_user_vfp_state *uvfp);
-#else /*CFG_WITH_VFP*/
-static inline void thread_kernel_save_vfp(void)
-{
-}
-
-static inline void thread_kernel_restore_vfp(void)
-{
-}
-#endif /*CFG_WITH_VFP*/
-#ifdef CFG_WITH_VFP
-void thread_user_save_vfp(void);
-#else
-static inline void thread_user_save_vfp(void)
-{
-}
-#endif
-#ifdef CFG_WITH_VFP
-void thread_user_clear_vfp(struct user_mode_ctx *uctx);
-#else
-static inline void thread_user_clear_vfp(struct user_mode_ctx *uctx __unused)
-{
-}
-#endif
+#ifdef CFG_WITH_FPU
+void thread_user_enable_fpu(struct thread_user_fpu_state *ufpu);
+void thread_user_save_fpu(void);
+void thread_user_clear_fpu(struct user_mode_ctx *uctx);
+#else /*CFG_WITH_FPU*/
+static inline void thread_user_enable_fpu(struct thread_user_fpu_state *ufpu __unused) { }
+static inline void thread_user_save_fpu(void) { }
+static inline void thread_user_clear_fpu(struct user_mode_ctx *uctx __unused) { }
+#endif /*CFG_WITH_FPU*/
 
 vaddr_t thread_get_saved_thread_sp(void);
 

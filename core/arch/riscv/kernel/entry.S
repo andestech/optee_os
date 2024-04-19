@@ -161,6 +161,10 @@ FUNC _start , :
 	mv	s1, a1		/* Save device tree address into s1 */
 #endif
 
+	/* Disable FPU to detect illegal use of floating-point */
+	li	t0, STATUS_FS_MASK
+	csrc	CSR_XSTATUS, t0
+
 	/* Only first hart who wins lottery runs the primary boot sequence. */
 	la	a3, hart_lottery
 	li	a2, 1

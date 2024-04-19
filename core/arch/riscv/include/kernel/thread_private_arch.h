@@ -9,6 +9,7 @@
 #ifndef __ASSEMBLER__
 
 #include <kernel/thread.h>
+#include <kernel/fpu.h>
 
 #define STACK_TMP_OFFS		0
 
@@ -46,6 +47,14 @@ struct thread_user_mode_rec {
 	 */
 	unsigned long x[16];
 };
+
+#ifdef CFG_WITH_FPU
+struct thread_fpu_state {
+	bool ns_saved;
+	struct fpu_state ns;
+	struct thread_user_fpu_state *ufpu;
+};
+#endif /*CFG_WITH_FPU*/
 
 extern long thread_user_kcode_offset;
 

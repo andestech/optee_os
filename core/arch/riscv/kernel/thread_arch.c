@@ -14,6 +14,7 @@
 #include <keep.h>
 #include <kernel/asan.h>
 #include <kernel/boot.h>
+#include <kernel/fpu.h>
 #include <kernel/interrupt.h>
 #include <kernel/linker.h>
 #include <kernel/lockdep.h>
@@ -86,15 +87,87 @@ void __nostackcheck thread_unmask_exceptions(uint32_t state)
 	thread_set_exceptions(state & THREAD_EXCP_ALL);
 }
 
-static void thread_lazy_save_ns_vfp(void)
+static void thread_lazy_save_ns_fpu(void)
 {
-	static_assert(!IS_ENABLED(CFG_WITH_VFP));
+#ifdef CFG_WITH_FPU
+	struct thread_ctx *thr = threads + thread_get_id();
+
+	thr->fpu_state.ns_saved = false;
+	fpu_lazy_save_state_init(&thr->fpu_state.ns);
+#endif /* CFG_WITH_FPU */
 }
 
-static void thread_lazy_restore_ns_vfp(void)
+static void thread_lazy_restore_ns_fpu(void)
 {
-	static_assert(!IS_ENABLED(CFG_WITH_VFP));
+#ifdef CFG_WITH_FPU
+	struct thread_ctx *thr = threads + thread_get_id();
+	struct thread_user_fpu_state *tuf = thr->fpu_state.ufpu;
+
+	if (tuf && tuf->lazy_saved && !tuf->saved) {
+		fpu_lazy_save_state_final(&tuf->fpu, false /*!force_save*/);
+		tuf->saved = true;
+	}
+
+	fpu_lazy_restore_state(&thr->fpu_state.ns, thr->fpu_state.ns_saved);
+	thr->fpu_state.ns_saved = false;
+#endif /* CFG_WITH_FPU */
 }
+
+#ifdef CFG_WITH_FPU
+void thread_user_enable_fpu(struct thread_user_fpu_state *ufpu)
+{
+	struct thread_ctx *thr = threads + thread_get_id();
+	struct thread_user_fpu_state *tuf = thr->fpu_state.ufpu;
+
+	assert(thread_get_exceptions() & THREAD_EXCP_FOREIGN_INTR);
+	assert(!fpu_is_enabled());
+
+	if (!thr->fpu_state.ns_saved) {
+		fpu_lazy_save_state_final(&thr->fpu_state.ns,
+					  true /*force_save*/);
+		thr->fpu_state.ns_saved = true;
+	} else if (tuf && ufpu != tuf) {
+		if (tuf->lazy_saved && !tuf->saved) {
+			fpu_lazy_save_state_final(&tuf->fpu,
+						  false /*!force_save*/);
+			tuf->saved = true;
+		}
+	}
+
+	if (ufpu->lazy_saved)
+		fpu_lazy_restore_state(&ufpu->fpu, ufpu->saved);
+	ufpu->lazy_saved = false;
+	ufpu->saved = false;
+
+	thr->fpu_state.ufpu = ufpu;
+	fpu_enable();
+}
+
+void thread_user_save_fpu(void)
+{
+	struct thread_ctx *thr = threads + thread_get_id();
+	struct thread_user_fpu_state *tuf = thr->fpu_state.ufpu;
+
+	assert(thread_get_exceptions() & THREAD_EXCP_FOREIGN_INTR);
+	if (!fpu_is_enabled())
+		return;
+
+	assert(tuf && !tuf->lazy_saved && !tuf->saved);
+	fpu_lazy_save_state_init(&tuf->fpu);
+	tuf->lazy_saved = true;
+}
+
+void thread_user_clear_fpu(struct user_mode_ctx *uctx)
+{
+	struct thread_user_fpu_state *ufpu = &uctx->fpu;
+	struct thread_ctx *thr = threads + thread_get_id();
+
+	if (ufpu == thr->fpu_state.ufpu)
+		thr->fpu_state.ufpu = NULL;
+	ufpu->lazy_saved = false;
+	ufpu->saved = false;
+}
+#endif /* CFG_WITH_FPU */
 
 static void setup_unwind_user_mode(struct thread_scall_regs *regs)
 {
@@ -120,7 +193,7 @@ void thread_scall_handler(struct thread_scall_regs *regs)
 	state = thread_get_exceptions();
 	thread_unmask_exceptions(state & ~THREAD_EXCP_NATIVE_INTR);
 
-	thread_user_save_vfp();
+	thread_user_save_fpu();
 
 	sess = ts_get_current_session();
 
@@ -244,7 +317,7 @@ static void __thread_alloc_and_run(uint32_t a0, uint32_t a1, uint32_t a2,
 	threads[n].flags = 0;
 	init_regs(threads + n, a0, a1, a2, a3, a4, a5, a6, a7, pc);
 
-	thread_lazy_save_ns_vfp();
+	thread_lazy_save_ns_fpu();
 
 	l->flags &= ~THREAD_CLF_TMP;
 
@@ -364,7 +437,7 @@ void thread_resume_from_rpc(uint32_t thread_id, uint32_t a0, uint32_t a1,
 		threads[n].flags &= ~THREAD_FLAGS_COPY_ARGS_ON_RETURN;
 	}
 
-	thread_lazy_save_ns_vfp();
+	thread_lazy_save_ns_fpu();
 
 	if (threads[n].have_user_map)
 		ftrace_resume();
@@ -382,7 +455,7 @@ void thread_state_free(void)
 
 	assert(ct != THREAD_ID_INVALID);
 
-	thread_lazy_restore_ns_vfp();
+	thread_lazy_restore_ns_fpu();
 
 	thread_lock_global();
 
@@ -409,11 +482,11 @@ int thread_state_suspend(uint32_t flags, unsigned long status, vaddr_t pc)
 	thread_check_canaries();
 
 	if (is_from_user(status)) {
-		thread_user_save_vfp();
+		thread_user_save_fpu();
 		tee_ta_update_session_utime_suspend();
 		tee_ta_gprof_sample_pc(pc);
 	}
-	thread_lazy_restore_ns_vfp();
+	thread_lazy_restore_ns_fpu();
 
 	thread_lock_global();
 
