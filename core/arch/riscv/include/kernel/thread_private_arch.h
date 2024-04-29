@@ -49,9 +49,8 @@ struct thread_user_mode_rec {
 
 extern long thread_user_kcode_offset;
 
-void thread_trap_handler(long cause, unsigned long epc,
-			 struct thread_trap_regs *regs,
-			 bool user);
+void thread_interrupt_handler(unsigned long cause,
+			      struct thread_ctx_regs *regs);
 /*
  * Initializes TVEC for current hart. Called by thread_init_per_cpu()
  */
@@ -118,9 +117,7 @@ void thread_exit_user_mode(unsigned long a0, unsigned long a1,
 			   unsigned long a2, unsigned long a3,
 			   unsigned long sp, unsigned long pc,
 			   unsigned long status);
-void thread_copy_trap_regs_to_ctx(struct thread_trap_regs *trap_regs,
-				  struct thread_ctx_regs *ctx_regs);
-void thread_foreign_interrupt_handler(struct thread_trap_regs *regs, bool user);
+void thread_foreign_interrupt_handler(struct thread_ctx_regs *regs);
 
 #endif /*__ASSEMBLER__*/
 #endif /*__KERNEL_THREAD_PRIVATE_ARCH_H*/
