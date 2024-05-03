@@ -20,9 +20,8 @@ CFG_TEE_CORE_NB_CORE ?= 1
 CFG_NUM_THREADS ?= 1
 $(call force,CFG_BOOT_SYNC_CPU,n)
 
-# RISC-V-specific flags
-rv64-platform-isa ?= rv64imafdc_zicsr_zifencei
-
+$(call force,CFG_WITH_RVC,y)
+$(call force,CFG_WITH_FPU,y)
 $(call force,CFG_RISCV_M_MODE,n)
 $(call force,CFG_RISCV_S_MODE,y)
 $(call force,CFG_RISCV_PLIC,n)
